@@ -4,7 +4,7 @@ This repository contains two complementary methods for single‑cell batch effec
 
 - SupervisedBer: supervised domain adaptation using labeled cell types across batches.
 - UnsupervisedBer: an autoencoder with a batch‑conditioned decoder and an independence discriminator to align batches without labels.
-- proofs: the supplementary material that includes all the proofs of the paper theorem.
+- proofs: supplementary material that provides full and detailed proofs for all the theorems stated in the paper.
 
 Both methods operate on `AnnData` objects (Scanpy) and provide example experiment scripts over multiple datasets.
 
