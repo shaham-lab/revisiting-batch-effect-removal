@@ -1,0 +1,8 @@
+# Optional baseline methods and utilities
+pyliger>=0.3.0
+harmonypy>=0.0.6
+
+# Plotting backends
+seaborn>=0.11
+
+
