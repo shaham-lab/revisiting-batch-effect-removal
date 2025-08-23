@@ -4,6 +4,20 @@ from sklearn.metrics import f1_score, classification_report
 
 
 def get_scale_fac(d, discard_diag=True):
+    """
+    Calculate scale factor for kernel functions based on pairwise distances.
+    
+    This function computes a scale factor for Gaussian kernels by finding the
+    median of the k-nearest neighbor distances. The scale factor helps determine
+    the bandwidth of the kernel.
+    
+    Args:
+        d (torch.Tensor): Pairwise distance matrix
+        discard_diag (bool): Whether to discard diagonal elements (True for cross-batch distances)
+    
+    Returns:
+        torch.Tensor: Scale factor for kernel computation
+    """
     # when d=pdist(x,y), set discard_diag to True, when d=pdist(x,x), set discard_diag to False.
     value, index = torch.sort(d, dim=1)
     nn = value[:, :20]
@@ -16,6 +30,19 @@ def get_scale_fac(d, discard_diag=True):
 
 
 def get_weight_matrix(src_features,target_features):
+    """
+    Compute attention weight matrix between source and target features.
+    
+    This function calculates pairwise distances between source and target features,
+    applies a kernel function, and computes softmax weights for attention mechanisms.
+    
+    Args:
+        src_features (torch.Tensor): Source batch features
+        target_features (torch.Tensor): Target batch features
+    
+    Returns:
+        torch.Tensor: Weight matrix for cross-batch attention
+    """
     pairwise_distances = torch.cdist(src_features,target_features, p=2.0)
     kernel_matrix = t_kernel(pairwise_distances)
     k_kernel_matrix = kernel_matrix  # * weight_matrix
@@ -25,6 +52,16 @@ def get_weight_matrix(src_features,target_features):
 
 
 def get_one_hot_encoding(labels, n_classes):
+    """
+    Convert integer labels to one-hot encoded format.
+    
+    Args:
+        labels (torch.Tensor): Integer labels
+        n_classes (int): Number of classes
+    
+    Returns:
+        torch.Tensor: One-hot encoded labels
+    """
     one_hots_label = torch.zeros(len(labels), n_classes).to(labels.device)
     one_hots_label[range(len(labels)), labels.type(torch.int)] = 1
 
@@ -33,6 +70,20 @@ def get_one_hot_encoding(labels, n_classes):
 
 ## CCSA
 def ccsa_loss(x, y, class_eq):
+    """
+    Compute Contrastive Semantic Alignment (CCSA) loss.
+    
+    CCSA encourages features from the same class to be close and features from
+    different classes to be separated by a margin, regardless of their batch origin.
+    
+    Args:
+        x (torch.Tensor): Source batch features
+        y (torch.Tensor): Target batch features
+        class_eq (torch.Tensor): Binary tensor indicating if pairs belong to same class
+    
+    Returns:
+        torch.Tensor: CCSA loss value
+    """
     margin = 1
     x = torch.nn.functional.normalize(x, p=2, dim=1)
     y = torch.nn.functional.normalize(y, p=2, dim=1)
@@ -45,7 +96,20 @@ def ccsa_loss(x, y, class_eq):
 ## dSNE
 def dsne_loss(src_feature, src_labels, tgt_feature, target_labels):
     """
-    taken from: https://github.com/aws-samples/d-SNE/blob/master/train_val/custom_layers.py
+    Compute Deep Siamese Network Embedding (dSNE) loss.
+    
+    dSNE loss ensures that the maximum intra-class distance is smaller than the
+    minimum inter-class distance by a margin, promoting better class separation
+    in the learned embedding space.
+    
+    Args:
+        src_feature (torch.Tensor): Source batch features
+        src_labels (torch.Tensor): Source batch labels
+        tgt_feature (torch.Tensor): Target batch features
+        target_labels (torch.Tensor): Target batch labels
+    
+    Returns:
+        torch.Tensor: dSNE loss value
     """
     bs_tgt, bs_src = len(src_feature), len(tgt_feature)
     embed_size = src_feature.shape[1]
@@ -78,6 +142,16 @@ def dsne_loss(src_feature, src_labels, tgt_feature, target_labels):
 
 
 def get_one_hot_encoding(labels, n_classes):
+    """
+    Convert integer labels to one-hot encoded format (numpy version).
+    
+    Args:
+        labels (numpy.ndarray or scalar): Integer labels
+        n_classes (int): Number of classes
+    
+    Returns:
+        numpy.ndarray: One-hot encoded labels
+    """
     if not isinstance(labels, np.ndarray):
         labels = np.array([labels])
     # else torch.is_tensor(labels):
@@ -88,12 +162,38 @@ def get_one_hot_encoding(labels, n_classes):
 
 
 def t_kernel(values):
+    """
+    Apply t-kernel transformation to distance values.
+    
+    The t-kernel is a simple kernel function that transforms distances
+    using the formula 1/(1 + values), creating a similarity measure.
+    
+    Args:
+        values (torch.Tensor): Distance values
+    
+    Returns:
+        torch.Tensor: Kernel-transformed values
+    """
     kernel_t = 1 / (1 + values)
 
     return kernel_t
 
 
 def gaussian_kernel(values, scale):
+    """
+    Apply Gaussian kernel transformation to distance values.
+    
+    The Gaussian kernel transforms distances using the formula
+    exp(-values / scale), creating a similarity measure with bandwidth
+    controlled by the scale parameter.
+    
+    Args:
+        values (torch.Tensor): Distance values
+        scale (torch.Tensor): Scale parameter for the Gaussian kernel
+    
+    Returns:
+        torch.Tensor: Gaussian kernel-transformed values
+    """
     scale_fac_i = scale
     kernel_gaussian = torch.exp(-values / (scale_fac_i.unsqueeze(1)).detach())
 
@@ -101,6 +201,19 @@ def gaussian_kernel(values, scale):
 
 
 def get_scale_fac(d):
+    """
+    Calculate scale factor for Gaussian kernel based on pairwise distances.
+    
+    This function computes a scale factor for Gaussian kernels by finding the
+    median of the pairwise distances. The scale factor helps determine the
+    bandwidth of the kernel.
+    
+    Args:
+        d (torch.Tensor): Pairwise distance matrix
+    
+    Returns:
+        torch.Tensor: Scale factor for kernel computation
+    """
     # when d=pdist(x,y), set discard_diag to True, when d=pdist(x,x), set discard_diag to False.
     [median_row, _] = torch.median(d + torch.max(d) * torch.eye(n=d.shape[0], m=d.shape[1]), dim=1)
 
@@ -108,6 +221,19 @@ def get_scale_fac(d):
 
 
 def get_weight_matrix_attn(src_feature, tgt_feature):
+    """
+    Compute attention weight matrix between source and target features using softmax.
+    
+    This function normalizes source and target features and computes a softmax
+    weight matrix based on their dot product.
+    
+    Args:
+        src_feature (torch.Tensor): Source batch features
+        tgt_feature (torch.Tensor): Target batch features
+    
+    Returns:
+        torch.Tensor: Weight matrix for cross-batch attention
+    """
     src_feature = torch.nn.functional.normalize(src_feature, p=2, dim=1)
     tgt_feature = torch.nn.functional.normalize(tgt_feature, p=2, dim=1)
 
@@ -117,6 +243,20 @@ def get_weight_matrix_attn(src_feature, tgt_feature):
 
 
 def get_weight_matrix(src_label, tgt_label):
+    """
+    Compute attention weight matrix between source and target labels using t-kernel.
+    
+    This function calculates pairwise distances between source and target labels,
+    applies a t-kernel transformation, and computes a weight matrix using
+    diagonal normalization.
+    
+    Args:
+        src_label (torch.Tensor): Source batch labels
+        tgt_label (torch.Tensor): Target batch labels
+    
+    Returns:
+        torch.Tensor: Weight matrix for cross-batch attention
+    """
     pairwise_distances = torch.cdist(src_label, tgt_label, p=2.0)
     kernel_t = t_kernel(pairwise_distances)
     k_kernel_matrix = kernel_t
@@ -126,6 +266,20 @@ def get_weight_matrix(src_label, tgt_label):
 
 
 def get_gaussian_weight_matrix(src_label, tgt_label):
+    """
+    Compute attention weight matrix between source and target labels using Gaussian kernel.
+    
+    This function calculates pairwise distances between source and target labels,
+    applies a Gaussian kernel transformation, and computes a weight matrix using
+    diagonal normalization.
+    
+    Args:
+        src_label (torch.Tensor): Source batch labels
+        tgt_label (torch.Tensor): Target batch labels
+    
+    Returns:
+        torch.Tensor: Weight matrix for cross-batch attention
+    """
     pairwise_distances = torch.cdist(src_label, tgt_label, p=2.0)
     scale = get_scale_fac(pairwise_distances)
     kernel_gaussian = gaussian_kernel(pairwise_distances,scale)
@@ -136,6 +290,23 @@ def get_gaussian_weight_matrix(src_label, tgt_label):
 
 def get_cdca_term(src_feature, tgt_feature, src_label, tgt_label,
                   n_classes=2, nearest_neighbours=50):
+    """
+    Compute terms for Cross-Domain Cross-Attention (CDCA) loss.
+    
+    This function computes attention matrices for different pairs of source and
+    target features and labels, and returns the attention terms for CDCA loss.
+    
+    Args:
+        src_feature (torch.Tensor): Source batch features
+        tgt_feature (torch.Tensor): Target batch features
+        src_label (torch.Tensor): Source batch labels
+        tgt_label (torch.Tensor): Target batch labels
+        n_classes (int): Number of classes
+        nearest_neighbours (int): Number of nearest neighbors for scale calculation
+    
+    Returns:
+        tuple: Attention terms for CDCA loss
+    """
     attention_s_t = get_weight_matrix(src_feature, tgt_feature)
     attention_t_s = get_weight_matrix(tgt_feature, src_feature)
     attention_s_s = get_weight_matrix(src_feature, src_feature)
@@ -212,6 +383,20 @@ def weighted_bce_loss(predictions, targets):
 
 
 def gaussian_kernel(values, scale):
+    """
+    Apply Gaussian kernel transformation to distance values (numpy version).
+    
+    The Gaussian kernel transforms distances using the formula
+    exp(-values / scale), creating a similarity measure with bandwidth
+    controlled by the scale parameter.
+    
+    Args:
+        values (numpy.ndarray or scalar): Distance values
+        scale (numpy.ndarray or scalar): Scale parameter for the Gaussian kernel
+    
+    Returns:
+        numpy.ndarray: Gaussian kernel-transformed values
+    """
     scale_fac_i = scale
     kernel_gaussian = torch.exp(-values / (scale_fac_i.unsqueeze(1)))
 
@@ -219,6 +404,18 @@ def gaussian_kernel(values, scale):
 
 
 def t_kernel(values):
+    """
+    Apply t-kernel transformation to distance values (numpy version).
+    
+    The t-kernel is a simple kernel function that transforms distances
+    using the formula 1/(1 + values), creating a similarity measure.
+    
+    Args:
+        values (numpy.ndarray or scalar): Distance values
+    
+    Returns:
+        numpy.ndarray: Kernel-transformed values
+    """
     kernel_t = 1 / (1 + values)
 
     return kernel_t
@@ -229,6 +426,19 @@ def make_onehot_to_value(x):
 
 
 def calculate_f1_score(dataset_test, net):
+    """
+    Calculate F1 score for a given dataset and model.
+    
+    This function evaluates the F1 score of a model on a test dataset,
+    including source and target domains.
+    
+    Args:
+        dataset_test (list): A list containing images, labels, and batch IDs.
+        net (torch.nn.Module): The model to evaluate.
+    
+    Returns:
+        float: Mean F1 score across all classes.
+    """
     net.eval()
     images = torch.tensor(dataset_test[:][0])
     labels = torch.tensor(dataset_test[:][1])

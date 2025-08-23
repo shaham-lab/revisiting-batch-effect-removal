@@ -8,6 +8,24 @@ from torch import nn
 from tqdm import tqdm
 
 class MMD(nn.Module):
+    """
+    Maximum Mean Discrepancy (MMD) implementation for measuring distribution differences.
+    
+    MMD is a kernel-based method for measuring the difference between two probability
+    distributions. It uses a kernel function to map data to a high-dimensional
+    feature space where the difference between distributions can be measured
+    using the mean embeddings.
+    
+    Attributes:
+        src (torch.Tensor): Source distribution samples
+        target (torch.Tensor): Target distribution samples
+        target_sample_size (int): Number of samples to use for scale calculation
+        n_neighbors (int): Number of nearest neighbors for scale calculation
+        scales (torch.Tensor): Kernel bandwidth scales
+        weights (torch.Tensor): Weights for different kernel scales
+        kernel (function): Kernel function to use
+    """
+    
     def __init__(self,
                  src,
                  target,
@@ -15,6 +33,17 @@ class MMD(nn.Module):
                  n_neighbors=500,
                  scales=None,
                  weights=None):
+        """
+        Initialize the MMD module.
+        
+        Args:
+            src (torch.Tensor): Source distribution samples
+            target (torch.Tensor): Target distribution samples
+            target_sample_size (int): Number of samples to use for scale calculation
+            n_neighbors (int): Number of nearest neighbors for scale calculation
+            scales (torch.Tensor, optional): Pre-computed kernel scales
+            weights (torch.Tensor, optional): Weights for different kernel scales
+        """
         super(MMD, self).__init__()
         if scales is None:
             med_list = torch.zeros(5)
@@ -40,6 +69,19 @@ class MMD(nn.Module):
         self.weights = weights
 
     def RaphyKernel(self, X, Y):
+        """
+        Compute Raphy kernel between two sets of points.
+        
+        The Raphy kernel is a multi-scale Gaussian kernel that uses multiple
+        bandwidths to capture different scales of structure in the data.
+        
+        Args:
+            X (torch.Tensor): First set of points
+            Y (torch.Tensor): Second set of points
+        
+        Returns:
+            torch.Tensor: Kernel matrix between X and Y
+        """
         # expand dist to a 1xnxm tensor where the 1 is broadcastable
         sQdist = (torch.cdist(X, Y) ** 2).unsqueeze(0)
         scales = self.scales.unsqueeze(-1).unsqueeze(-1)
@@ -49,6 +91,18 @@ class MMD(nn.Module):
 
     # Calculate the MMD cost
     def cost(self):
+        """
+        Calculate the MMD cost between source and target distributions.
+        
+        This function computes the MMD estimate by sampling from both distributions
+        and computing the kernel-based distance. It performs multiple trials to
+        get a stable estimate.
+        
+        Returns:
+            tuple: (mmd_mean, mmd_std)
+                - mmd_mean (torch.Tensor): Mean MMD estimate
+                - mmd_std (torch.Tensor): Standard deviation of MMD estimates
+        """
         mmd_list = torch.zeros(75)
         for i in range(75):
             src = self.src[torch.randint(0, self.src.shape[0] - 1, (self.target_sample_size,))]
@@ -66,6 +120,20 @@ class MMD(nn.Module):
 
 
 def eval_mmd(source, target):
+    """
+    Evaluate MMD between source and target distributions.
+    
+    This function is a convenience wrapper that creates an MMD object and
+    computes the MMD cost between two distributions. It handles dimension
+    matching by truncating to the minimum dimension.
+    
+    Args:
+        source (torch.Tensor): Source distribution samples
+        target (torch.Tensor): Target distribution samples
+    
+    Returns:
+        tuple: (mmd_mean, mmd_std) - Mean and standard deviation of MMD estimates
+    """
     len_source = min(source.shape[1],target.shape[1])
     s1 =source[:,:len_source]
     s2 =target[:,:len_source]

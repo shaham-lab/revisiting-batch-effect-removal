@@ -6,6 +6,11 @@ def lr_scheduler(loss, ideal_loss, x_min=0.1, x_max=0.1, h_min=0.1, f_max=2.0):
     """
     Gap-aware Learning Rate Scheduler for Adversarial Networks.
 
+    This scheduler adjusts the learning rate based on the gap between the current
+    discriminator loss and the ideal loss. It helps maintain stable training
+    in adversarial settings by preventing the discriminator from becoming too
+    strong or too weak.
+
     Args:
         loss (torch.Tensor): the loss of the discriminator D on the training data.
         ideal_loss (float): the ideal loss of D.
@@ -32,6 +37,20 @@ def lr_scheduler(loss, ideal_loss, x_min=0.1, x_max=0.1, h_min=0.1, f_max=2.0):
 
 
 def compute_ind_disc_R1_loss(model, x, y):
+    """
+    Compute R1 regularization loss for independence discriminator.
+    
+    R1 regularization penalizes the gradient norm of the discriminator with respect
+    to real data, helping to stabilize training and prevent mode collapse.
+    
+    Args:
+        model (nn.Module): Independence discriminator model
+        x (torch.Tensor): Input data
+        y (torch.Tensor): Batch indicators
+    
+    Returns:
+        torch.Tensor: R1 regularization loss
+    """
     x = x.detach().clone()
     x.requires_grad_()
     pred_real = model(x).sum()
@@ -53,6 +72,22 @@ ind_criterion = F.binary_cross_entropy
 
 
 def indep_loss(logits, y, should_be_dependent=True):
+    """
+    Compute independence loss for the discriminator.
+    
+    This function computes the binary cross-entropy loss between the discriminator
+    predictions and batch indicators. When should_be_dependent=True, it encourages
+    the discriminator to predict batch membership correctly. When should_be_dependent=False,
+    it encourages the discriminator to be unable to predict batch membership.
+    
+    Args:
+        logits (torch.Tensor): Discriminator predictions
+        y (torch.Tensor): Batch indicators (0 or 1)
+        should_be_dependent (bool): Whether the discriminator should be able to predict batch membership
+    
+    Returns:
+        torch.Tensor: Independence loss value
+    """
     logits = logits.squeeze()
     y = y.squeeze()
     y = torch.clamp(y, min=1e-3, max=1 - 1e-3)
@@ -69,6 +104,20 @@ import torch
 
 
 def gradient_penalty(real, fake, f):
+    """
+    Compute gradient penalty for Wasserstein GAN training.
+    
+    This function computes the gradient penalty term used in Wasserstein GAN with
+    gradient penalty (WGAN-GP) to enforce the 1-Lipschitz constraint on the discriminator.
+    
+    Args:
+        real (torch.Tensor): Real data samples
+        fake (torch.Tensor): Fake data samples
+        f (nn.Module): Discriminator function
+    
+    Returns:
+        torch.Tensor: Gradient penalty loss
+    """
     def interpolate(a, b):
         shape = [a.size(0)] + [1] * (a.dim() - 1)
         alpha = torch.rand(shape)
@@ -89,10 +138,45 @@ def gradient_penalty(real, fake, f):
 
 
 def eval_mmd(source, target, num_pts=500):
+    """
+    Evaluate Maximum Mean Discrepancy (MMD) between source and target distributions.
+    
+    MMD is a kernel-based method for measuring the difference between two probability
+    distributions. It's commonly used in domain adaptation to measure how well
+    two batches have been aligned.
+    
+    Args:
+        source (torch.Tensor): Source distribution samples
+        target (torch.Tensor): Target distribution samples
+        num_pts (int): Number of points to sample for MMD computation
+    
+    Returns:
+        tuple: (mmd_mean, mmd_std) - Mean and standard deviation of MMD estimates
+    """
     return MMD(source, target).cost()
 
 
 def get_cdca_term(src_feature, tgt_feature, src_label, tgt_label):
+    """
+    Compute Cross-Domain Cross-Attention (CDCA) terms.
+    
+    This function computes attention matrices between source and target features
+    and labels for cross-domain alignment. The attention matrices help identify
+    corresponding regions in the feature space across different batches.
+    
+    Args:
+        src_feature (torch.Tensor): Source batch features
+        tgt_feature (torch.Tensor): Target batch features
+        src_label (torch.Tensor): Source batch labels
+        tgt_label (torch.Tensor): Target batch labels
+    
+    Returns:
+        tuple: (attention_s_t, attention_t_s, attention_s_s, attention_t_t)
+            - attention_s_t: Attention from source to target features
+            - attention_t_s: Attention from target to source features
+            - attention_s_s: Self-attention for source features
+            - attention_t_t: Self-attention for target features
+    """
     attention_s_t = torch.nn.functional.softmax(src_feature @ tgt_feature.t()/2, dim=-1)
     attention_t_s = torch.nn.functional.softmax(tgt_feature @ src_feature.t()/2, dim=-1)
     attention_s_s = torch.nn.functional.softmax(src_feature @ src_feature.t()/2, dim=-1)

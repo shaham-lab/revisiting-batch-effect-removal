@@ -35,6 +35,18 @@ import random
 
 
 def get_absulute_gradient(net):
+    """
+    Calculate the L2 norm of gradients for all parameters in the network.
+    
+    This function computes the gradient norm to monitor training stability
+    and can be used for gradient clipping or early stopping.
+    
+    Args:
+        net (nn.Module): Neural network whose gradients to compute
+    
+    Returns:
+        torch.Tensor: L2 norm of all gradients concatenated
+    """
     gradients = []
     for param in net.parameters():
         gradients.append(param.grad)
@@ -44,6 +56,20 @@ def get_absulute_gradient(net):
 
 
 def get_mutal_information(batch_y, mask0, mask1):
+    """
+    Find cells that exist in both batches based on their labels.
+    
+    This function identifies cells that have the same cell type labels
+    across different batches, which is useful for cross-domain alignment.
+    
+    Args:
+        batch_y (torch.Tensor): Cell type labels for all cells
+        mask0 (torch.Tensor): Boolean mask for first batch
+        mask1 (torch.Tensor): Boolean mask for second batch
+    
+    Returns:
+        torch.Tensor: Boolean mask indicating cells present in both batches
+    """
     unique_tensor1 = torch.unique(batch_y[mask0])
     unique_tensor2 = torch.unique(batch_y[mask1])
 
@@ -52,7 +78,6 @@ def get_mutal_information(batch_y, mask0, mask1):
     set2 = set(unique_tensor2.tolist())
 
     # Perform set intersection
-
     intersection = set1 & set2
     # Convert the intersection set to a tensor for element-wise comparison
     insersection_cells = torch.tensor(list(intersection))
@@ -62,6 +87,18 @@ def get_mutal_information(batch_y, mask0, mask1):
 
 
 def compute_class_weights(labels):
+    """
+    Compute class weights for imbalanced classification.
+    
+    Calculates inverse frequency weights for each class to handle
+    imbalanced cell type distributions in the dataset.
+    
+    Args:
+        labels (torch.Tensor): Class labels for all samples
+    
+    Returns:
+        dict: Dictionary mapping class indices to their weights
+    """
     labels_list = labels.tolist()
 
     label_counts = Counter(labels_list)
@@ -73,6 +110,32 @@ def compute_class_weights(labels):
 def train_sda(cdca_dataloader, cdca_test, class_number
               , net, optimizer, criterion, lr_scheduler, train_size,
               loss_type, writer, coef,coef_uda, gpu_flag=False, epoch=20):
+    """
+    Train the supervised domain adaptation network.
+    
+    This function implements the main training loop for supervised batch effect removal.
+    It supports multiple loss functions including source-only, target-only, combined,
+    and various domain adaptation losses like MMD, CDCA, dSNE, and CCSA.
+    
+    Args:
+        cdca_dataloader (DataLoader): DataLoader for training data
+        cdca_test (Dataset): Test dataset for evaluation
+        class_number (int): Number of cell type classes
+        net (nn.Module): Neural network to train
+        optimizer (torch.optim.Optimizer): Optimizer for training
+        criterion (nn.Module): Loss function
+        lr_scheduler (torch.optim.lr_scheduler._LRScheduler): Learning rate scheduler
+        train_size (float): Proportion of data used for training
+        loss_type (str): Type of loss function to use ('source', 'target', 's&t', 's&t&u', 's&t&u&c', 'dSNE', 'CCSA')
+        writer (SummaryWriter): TensorBoard writer for logging
+        coef (float): Coefficient for CDCA loss term
+        coef_uda (float): Coefficient for unsupervised domain adaptation loss
+        gpu_flag (bool): Whether to use GPU (currently unused)
+        epoch (int): Number of training epochs
+    
+    Returns:
+        nn.Module: Trained neural network
+    """
     cdca_dataloader_forever = ForeverDataIterator(cdca_dataloader)
     # target_dataloader_forever = ForeverDataIterator(target_dataloader)
     loss_type = loss_type
@@ -202,6 +265,18 @@ from collections import Counter
 
 
 def compute_class_weights(labels):
+    """
+    Compute class weights for imbalanced classification as tensor.
+    
+    Calculates inverse frequency weights for each class and returns them
+    as a PyTorch tensor for use in weighted loss functions.
+    
+    Args:
+        labels (list or torch.Tensor): Class labels for all samples
+    
+    Returns:
+        torch.Tensor: Class weights tensor for weighted loss
+    """
     labels_list = labels
 
     # Count the occurrences of each class
@@ -220,6 +295,16 @@ def compute_class_weights(labels):
 
 
 def get_count_class(images, nclasses):
+    """
+    Count the number of samples per class.
+    
+    Args:
+        images (list): List of (data, label, batch_id) tuples
+        nclasses (int): Number of classes
+    
+    Returns:
+        list: Count of samples for each class
+    """
     count_per_class = [0] * nclasses
     for _, image_class, _ in images:
         count_per_class[image_class] += 1
@@ -227,6 +312,19 @@ def get_count_class(images, nclasses):
 
 
 def make_weights_for_balanced_classes(images, nclasses):
+    """
+    Create sample weights for balanced class sampling.
+    
+    Computes weights for each sample to balance class distribution
+    during training, giving higher weights to samples from underrepresented classes.
+    
+    Args:
+        images (list): List of (data, label, batch_id) tuples
+        nclasses (int): Number of classes
+    
+    Returns:
+        list: Sample weights for balanced sampling
+    """
     n_images = len(images)
     count_per_class = get_count_class(images, nclasses)
     weight_per_class = [0.] * nclasses
@@ -240,6 +338,24 @@ def make_weights_for_balanced_classes(images, nclasses):
 
 
 def cdca_alignment(config, adata1, adata2, number_to_label, embed='', resample_data="resample"):
+    """
+    Perform supervised domain adaptation using CDCA (Cross-Domain Cell-type Alignment).
+    
+    This function implements the complete pipeline for supervised batch effect removal
+    using domain adaptation techniques. It trains a neural network to learn shared
+    representations across batches while preserving cell type information.
+    
+    Args:
+        config (dict): Configuration dictionary containing hyperparameters
+        adata1 (AnnData): Source batch data
+        adata2 (AnnData): Target batch data
+        number_to_label (dict): Mapping from numeric labels to cell type names
+        embed (str): Embedding key in adata.obsm to use (empty for raw data)
+        resample_data (str): Resampling strategy (currently unused)
+    
+    Returns:
+        AnnData: Processed data with batch-aligned representations in adata.obsm['X_emb']
+    """
     writer = SummaryWriter(log_dir=f'runs/{config["experiment_name"]}')
     test_size = config["test_size"]
     if embed != '':

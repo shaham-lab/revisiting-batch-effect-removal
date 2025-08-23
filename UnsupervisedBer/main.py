@@ -23,6 +23,28 @@ from unsupervised.utils import indep_loss, eval_mmd, gradient_penalty, lr_schedu
 
 
 def get_data_calibrated(src_data, target_data, encoder, decoder):
+    """
+    Generate calibrated data by swapping batch indicators during decoding.
+    
+    This function encodes source and target data, then decodes them using
+    the opposite batch indicator to create calibrated versions that should
+    be more similar across batches.
+    
+    Args:
+        src_data (torch.Tensor): Source batch data
+        target_data (torch.Tensor): Target batch data
+        encoder (nn.Module): Encoder network
+        decoder (nn.Module): Batch-conditioned decoder network
+    
+    Returns:
+        tuple: (code_src, code_target, recon_src, recon_target, calibrated_src, calibrated_target)
+            - code_src: Encoded source data
+            - code_target: Encoded target data
+            - recon_src: Reconstructed source data (same batch indicator)
+            - recon_target: Reconstructed target data (same batch indicator)
+            - calibrated_src: Calibrated source data (opposite batch indicator)
+            - calibrated_target: Calibrated target data (opposite batch indicator)
+    """
     encoder.eval()
     decoder.eval()
     y_src = torch.zeros(src_data.shape[0])
@@ -38,6 +60,22 @@ def get_data_calibrated(src_data, target_data, encoder, decoder):
 
 
 def validate(src, target, encoder, decoder):
+    """
+    Validate batch alignment using MMD (Maximum Mean Discrepancy).
+    
+    This function computes the MMD between calibrated data and original data
+    to measure how well the batches have been aligned. Lower MMD indicates
+    better alignment.
+    
+    Args:
+        src (torch.Tensor): Source batch data
+        target (torch.Tensor): Target batch data
+        encoder (nn.Module): Encoder network
+        decoder (nn.Module): Batch-conditioned decoder network
+    
+    Returns:
+        torch.Tensor: MMD value indicating batch alignment quality
+    """
     encoder.eval()
     decoder.eval()
     code_src, code_target, recon_src, recon_target, calibrated_src, calibrated_target = get_data_calibrated(src,
@@ -58,6 +96,20 @@ def validate(src, target, encoder, decoder):
 
 
 def get_mutal_information(batch_y, mask0, mask1):
+    """
+    Find cells that exist in both batches based on their labels.
+    
+    This function identifies cells that have the same cell type labels
+    across different batches, which is useful for cross-domain alignment.
+    
+    Args:
+        batch_y (torch.Tensor): Cell type labels for all cells
+        mask0 (torch.Tensor): Boolean mask for first batch
+        mask1 (torch.Tensor): Boolean mask for second batch
+    
+    Returns:
+        torch.Tensor: Boolean mask indicating cells present in both batches
+    """
     unique_tensor1 = torch.unique(batch_y[mask0])
     unique_tensor2 = torch.unique(batch_y[mask1])
 
@@ -66,7 +118,6 @@ def get_mutal_information(batch_y, mask0, mask1):
     set2 = set(unique_tensor2.tolist())
 
     # Perform set intersection
-
     intersection = set1 & set2
     # Convert the intersection set to a tensor for element-wise comparison
     insersection_cells = torch.tensor(list(intersection))
@@ -78,6 +129,30 @@ def get_mutal_information(batch_y, mask0, mask1):
 def train2(src, target, data_loader, net, ind_discriminator, ae_optim, ind_disc_optim,
            config, dataset
            ):
+    """
+    Train the unsupervised batch effect removal network.
+    
+    This function implements the main training loop for unsupervised batch effect removal.
+    It alternates between training the independence discriminator and the autoencoder,
+    using adaptive loss coefficients based on MMD values.
+    
+    Args:
+        src (torch.Tensor): Source batch data
+        target (torch.Tensor): Target batch data
+        data_loader (DataLoader): DataLoader for training data
+        net (nn.Module): Autoencoder network (encoder + decoder)
+        ind_discriminator (nn.Module): Independence discriminator
+        ae_optim (torch.optim.Optimizer): Optimizer for autoencoder
+        ind_disc_optim (torch.optim.Optimizer): Optimizer for discriminator
+        config (dict): Configuration dictionary
+        dataset (Dataset): Training dataset
+    
+    Returns:
+        tuple: (net, recon_losses, independence_losses)
+            - net: Trained autoencoder network
+            - recon_losses: List of reconstruction losses per epoch
+            - independence_losses: List of independence losses per epoch
+    """
     dataset_x = torch.tensor([item[0] for item in dataset]).float()
     dataset_y = torch.tensor([item[1] for item in dataset])
     dataset_id = torch.tensor([item[2] for item in dataset])
@@ -210,6 +285,27 @@ def train2(src, target, data_loader, net, ind_discriminator, ae_optim, ind_disc_
 
 
 def ber_for_notebook(config, adata1, adata2, embed='', load_pre_weights='', return_in='original_space'):
+    """
+    Main function for unsupervised batch effect removal.
+    
+    This function implements the complete pipeline for unsupervised batch effect removal.
+    It preprocesses data, trains the autoencoder with independence discriminator,
+    and returns calibrated data in the specified space (original, code, or both).
+    
+    Args:
+        config (dict): Configuration dictionary containing hyperparameters
+        adata1 (AnnData): Source batch data
+        adata2 (AnnData): Target batch data
+        embed (str): Embedding key in adata.obsm to use (empty for raw data)
+        load_pre_weights (str): Path to pre-trained weights (empty to train from scratch)
+        return_in (str): Return format ('original_space', 'code_space', or 'original_space_and_code')
+    
+    Returns:
+        AnnData or tuple: Calibrated data in specified format
+            - If return_in == 'code_space': Returns AnnData with latent representations
+            - If return_in == 'original_space': Returns tuple of (src_calibrated, target_calibrated)
+            - If return_in == 'original_space_and_code': Returns tuple of (code, src_calibrated, target_calibrated)
+    """
     torch.manual_seed(0)
     np.random.seed(0)
     random.seed(0)

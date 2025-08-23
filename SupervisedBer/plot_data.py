@@ -22,6 +22,21 @@ import matplotlib
 # matplotlib.use('TkAgg')
 
 def plot_scatter(src_pca, target_pca, labels_b1, labels_b2, plot_dir, title='before-calibrationp'):
+    """
+    Create scatter plots comparing source and target batches before and after calibration.
+    
+    This function generates scatter plots with marginal histograms to visualize
+    the distribution of data points across different batches. It creates two plots:
+    one colored by batch and another colored by cell type labels.
+    
+    Args:
+        src_pca (numpy.ndarray): PCA coordinates for source batch
+        target_pca (numpy.ndarray): PCA coordinates for target batch
+        labels_b1 (numpy.ndarray): Labels for source batch
+        labels_b2 (numpy.ndarray): Labels for target batch
+        plot_dir (str): Directory to save the plots
+        title (str): Title prefix for the plots
+    """
     scatterHist(src_pca[:, 0],
                 src_pca[:, 1],
                 target_pca[:, 0],
@@ -43,6 +58,28 @@ def plot_scatter(src_pca, target_pca, labels_b1, labels_b2, plot_dir, title='bef
 
 def scatterHist(x1, x2, y1, y2, l1, l2, axis1='', axis2='', title='', name1='', name2='',
                 plots_dir='', to_plot_labels=True):
+    """
+    Create a scatter plot with marginal histograms.
+    
+    This function creates a comprehensive visualization with a main scatter plot
+    and marginal histograms showing the distribution of data along each axis.
+    It can color points by batch or by cell type labels.
+    
+    Args:
+        x1 (numpy.ndarray): X coordinates for first dataset
+        x2 (numpy.ndarray): Y coordinates for first dataset
+        y1 (numpy.ndarray): X coordinates for second dataset
+        y2 (numpy.ndarray): Y coordinates for second dataset
+        l1 (numpy.ndarray): Labels for first dataset
+        l2 (numpy.ndarray): Labels for second dataset
+        axis1 (str): Label for x-axis
+        axis2 (str): Label for y-axis
+        title (str): Plot title
+        name1 (str): Name for first dataset
+        name2 (str): Name for second dataset
+        plots_dir (str): Directory to save the plot
+        to_plot_labels (bool): Whether to color points by labels (True) or by dataset (False)
+    """
     nullfmt = NullFormatter()  # no labels
 
     # definitions for the axes
